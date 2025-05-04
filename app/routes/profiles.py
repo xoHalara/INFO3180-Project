@@ -1,4 +1,5 @@
 import os
+import uuid
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from werkzeug.utils import secure_filename
 from app import db, jwt
@@ -55,7 +56,8 @@ def create_profile():
     
     photo_path = None
     if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f'{uuid.uuid4().hex}.{ext}'
         os.makedirs(os.path.join(current_app.root_path, UPLOAD_FOLDER), exist_ok=True)
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         file.save(os.path.join(current_app.root_path, file_path))
@@ -152,3 +154,49 @@ def get_matches(profile_id):
             matches.append(p.to_dict())
     
     return jsonify(matches), 200
+
+@bp.route('/<int:profile_id>', methods=['PUT'], strict_slashes=False)
+@jwt_required()
+def update_profile(profile_id):
+    profile = Profile.query.get_or_404(profile_id)
+    current_user_id = get_jwt_identity()
+    if profile.user_id_fk != current_user_id:
+        return jsonify({'message': 'Not authorized to edit this profile'}), 403
+
+    if request.content_type and request.content_type.startswith('multipart/form-data'):
+        data = request.form
+        file = request.files.get('photo')
+    else:
+        data = request.get_json()
+        file = None
+
+    # Update fields if present
+    for field in [
+        'description', 'parish', 'biography', 'sex', 'race', 'birth_year',
+        'height', 'fav_cuisine', 'fav_colour', 'fav_school_subject',
+        'political', 'religious', 'family_oriented'
+    ]:
+        if field in data:
+            value = data[field]
+            if field in ['height']:
+                value = float(value)
+            elif field in ['birth_year']:
+                value = int(value)
+            elif field in ['political', 'religious', 'family_oriented']:
+                value = value in ['true', 'True', '1', 'Yes']
+            setattr(profile, field, value)
+
+    # Handle photo update
+    if file and allowed_file(file.filename):
+        ext = file.filename.rsplit('.', 1)[1].lower()
+        filename = f'{uuid.uuid4().hex}.{ext}'
+        os.makedirs(os.path.join(current_app.root_path, UPLOAD_FOLDER), exist_ok=True)
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(os.path.join(current_app.root_path, file_path))
+        profile.photo = f'/api/profiles/uploads/{filename}'
+
+    profile.check_completeness()
+    db.session.commit()
+    p = profile.to_dict()
+    p['name'] = profile.user.name
+    return jsonify({'message': 'Profile updated successfully', 'profile': p}), 200

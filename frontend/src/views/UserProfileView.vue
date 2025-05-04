@@ -1,560 +1,251 @@
 <template>
-  <div class="user-profile">
-    <main class="main-content">
-      <div v-if="loading" class="loading">Loading...</div>
-      <div v-else>
-        <div class="profile-header">
-          <div class="profile-avatar">
-            <span v-if="userData.photo">
-              <img :src="userData.photo" alt="Profile Photo" />
-            </span>
-            <span v-else>{{
-              userData.name
-                ? userData.name[0].toUpperCase()
-                : fallbackUser?.name?.[0]?.toUpperCase() || '?'
-            }}</span>
-          </div>
-          <div class="profile-info">
-            <template v-if="!error">
-              <h2>{{ userData.name }}</h2>
-              <p class="username">@{{ userData.username }}</p>
-              <p class="email">{{ userData.email }}</p>
-              <p class="joined">Joined: {{ formatDate(userData.date_joined) }}</p>
-            </template>
-            <template v-else>
-              <h2>{{ fallbackUser?.name || 'Unknown User' }}</h2>
-              <p class="username">@{{ fallbackUser?.username || '' }}</p>
-              <p class="email">{{ fallbackUser?.email || '' }}</p>
-              <div class="error-message">Failed to fetch profile details. Showing local info.</div>
-            </template>
-            <div v-if="isOwnProfile" class="own-actions">
-              <router-link to="/profiles/new" class="btn-primary">Create New Profile</router-link>
-            </div>
-            <div v-else class="other-actions">
-              <button class="btn-fav">&#10084; Add to Favourites</button>
-            </div>
-          </div>
+  <div class="user-profile-view">
+    <div class="profile-header-bg">
+      <div class="profile-header">
+        <div class="avatar-lg">
+          {{ userData.name ? userData.name[0].toUpperCase() : '?' }}
         </div>
-        <div class="user-profiles-section">
-          <h3>
-            {{
-              isOwnProfile
-                ? 'Your Profiles'
-                : (userData.name || fallbackUser?.name || 'User') + "'s Profiles"
-            }}
-          </h3>
-          <div v-if="profiles.length === 0">No profiles found.</div>
-          <div v-else class="profile-grid">
-            <div v-for="profile in profiles" :key="profile.id" class="profile-card">
-              <div class="profile-details">
-                <div class="profile-meta">
-                  <span>{{ profile.sex }}</span> | <span>{{ profile.race }}</span> |
-                  <span>Born {{ profile.birth_year }}</span>
-                </div>
-                <div class="profile-name">{{ profile.name }}</div>
-                <div class="profile-desc">{{ profile.description }}</div>
-                <div class="profile-actions">
-                  <router-link :to="`/profiles/${profile.id}`" class="details-link"
-                    >View Details</router-link
-                  >
-                  <button
-                    class="btn-fav"
-                    :disabled="
-                      favouriteStore.favStates[profile.user_id]?.success ||
-                      favouriteStore.favStates[profile.user_id]?.loading
-                    "
-                    @click="() => addToFavourites(profile)"
-                    :aria-label="'Add ' + profile.name + ' to favourites'"
-                  >
-                    <span v-if="!favouriteStore.favStates[profile.user_id]?.success">&#10084;</span>
-                    <span v-else>✔️</span>
-                  </button>
-                  <button class="btn-match" @click="() => showMatches(profile.id)">Match Me</button>
-                </div>
-                <div v-if="favouriteStore.favStates[profile.user_id]?.error" class="fav-error">
-                  {{ favouriteStore.favStates[profile.user_id].error }}
-                </div>
-                <div v-if="favouriteStore.favStates[profile.user_id]?.success" class="fav-success">
-                  Added to favourites!
-                </div>
-              </div>
-            </div>
-          </div>
+        <div class="user-main-info">
+          <h2>{{ userData.name || userData.username }}</h2>
+          <p v-if="userData.username" class="username">@{{ userData.username }}</p>
+          <p v-if="userData.email" class="email">{{ userData.email }}</p>
         </div>
-        <div v-if="matchReportVisible" class="match-report-section">
-          <h3>Match Report</h3>
-          <div v-if="matchesLoading" class="loading">Loading matches...</div>
-          <div v-else-if="matches.length === 0">No matches found for this profile.</div>
-          <div v-else class="profile-grid">
-            <div v-for="match in matches" :key="match.id" class="profile-card">
-              <div class="profile-avatar">
-                <span v-if="match.photo"><img :src="match.photo" alt="Profile Photo" /></span>
-                <span v-else>{{ match.name ? match.name[0].toUpperCase() : '?' }}</span>
-              </div>
-              <div class="profile-details">
-                <div class="profile-name">{{ match.name }}</div>
-                <div class="profile-meta">
-                  <span>{{ match.sex }}</span> | <span>{{ match.race }}</span> |
-                  <span>Born {{ match.birth_year }}</span>
-                </div>
-                <router-link :to="`/profiles/${match.id}`" class="details-link">View Details</router-link>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="user-favourites-section" v-if="isOwnProfile">
-          <h3 class="section-title"><span class="icon">&#10084;</span> Your Favourites</h3>
-          <div v-if="favouritesLoading" class="loading">Loading favourites...</div>
-          <div v-else-if="favourites.length === 0" class="empty-state">
-            <span class="icon-empty">&#128148;</span>
-            <div>You have not favourited any users yet.</div>
-          </div>
-          <div v-else class="favourites-grid">
-            <div v-for="fav in favourites" :key="fav.id" class="favourite-card">
-              <div class="fav-avatar">
-                <span v-if="fav.photo"><img :src="fav.photo" alt="User Photo" /></span>
-                <span v-else>{{ fav.name ? fav.name[0].toUpperCase() : '?' }}</span>
-              </div>
-              <div class="fav-info">
-                <div class="fav-name">{{ fav.name }}</div>
-                <div class="fav-username">@{{ fav.username }}</div>
-                <router-link :to="`/profiles/${fav.id}`" class="details-link"
-                  >View Profile</router-link
-                >
-              </div>
-            </div>
-          </div>
-        </div>
-        <div v-if="isOwnProfile" class="top-fav-section">
-          <h3 class="section-title">
-            <span class="icon">&#11088;</span> Top 20 Most Favoured Users
-          </h3>
-          <div class="sort-controls">
-            <label for="favSortBy">Sort by:</label>
-            <select id="favSortBy" v-model="favSortBy">
-              <option value="name">Name</option>
-              <option value="parish">Parish</option>
-              <option value="age">Age</option>
-            </select>
-          </div>
-          <div v-if="topFavLoading" class="loading">Loading top favourites...</div>
-          <div v-else-if="topFavourites.length === 0" class="empty-state">
-            <span class="icon-empty">&#128533;</span>
-            <div>No favourites data available.</div>
-          </div>
-          <div v-else class="favourites-grid">
-            <div v-for="user in sortedTopFavourites" :key="user.id" class="favourite-card">
-              <div class="fav-avatar">
-                <span v-if="user.photo"><img :src="user.photo" alt="User Photo" /></span>
-                <span v-else>{{ user.name ? user.name[0].toUpperCase() : '?' }}</span>
-              </div>
-              <div class="fav-info">
-                <div class="fav-name">{{ user.name }}</div>
-                <div class="fav-username">@{{ user.username }}</div>
-                <div class="fav-meta">
-                  Parish: {{ user.parish || 'N/A' }} | Age:
-                  {{ user.birth_year ? new Date().getFullYear() - user.birth_year : 'N/A' }}
-                </div>
-                <div class="fav-count">Favourited: {{ user.favorite_count }} times</div>
-                <router-link :to="`/profiles/${user.id}`" class="details-link"
-                  >View Profile</router-link
-                >
-              </div>
-            </div>
+        <router-link
+          v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
+          to="/profiles/new"
+          class="btn-fab"
+          title="Add Profile"
+        >
+          <span class="material-icons">add</span>
+        </router-link>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        <span class="material-icons section-icon">badge</span>
+        User's Profiles
+      </div>
+      <div v-if="profiles.length === 0" class="empty-state">
+        <img src="https://cdn.jsdelivr.net/gh/edent/SuperTinyIcons/images/svg/user.svg" alt="No profiles" class="empty-illustration" />
+        <div>No profiles found for this user.</div>
+        <router-link
+          v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
+          to="/profiles/new"
+          class="btn-primary"
+        >
+          Create a profile
+        </router-link>
+      </div>
+      <div v-else class="profile-cards">
+        <div v-for="profile in profiles" :key="profile.id" class="profile-card">
+          <div class="avatar">{{ profile.name ? profile.name[0].toUpperCase() : '?' }}</div>
+          <div class="profile-card-info">
+            <div class="profile-name">{{ profile.name }}</div>
+            <div class="profile-meta">{{ profile.sex }}, {{ profile.race }}, Born {{ profile.birth_year }}</div>
+            <router-link :to="`/profiles/${profile.id}`" class="btn-view">View</router-link>
           </div>
         </div>
       </div>
-    </main>
+    </div>
+
+    <div class="section">
+      <div class="section-title">
+        <span class="material-icons section-icon">favorite</span>
+        Users Favourited by This User
+      </div>
+      <div v-if="loadingFavourites" class="loading">Loading favourites...</div>
+      <div v-else-if="userFavourites.length === 0" class="empty-state">
+        <img src="https://cdn.jsdelivr.net/gh/edent/SuperTinyIcons/images/svg/heart.svg" alt="No favourites" class="empty-illustration" />
+        <div>This user has not favourited any users yet.</div>
+      </div>
+      <div v-else class="fav-cards">
+        <div v-for="fav in userFavourites" :key="fav.id" class="fav-card">
+          <router-link :to="`/users/${fav.id}`" class="fav-link">
+            <div class="avatar-sm">{{ fav.name ? fav.name[0].toUpperCase() : '?' }}</div>
+            <div class="fav-details">
+              <div class="fav-name">{{ fav.name || fav.username }}</div>
+              <div class="fav-meta">
+                <span v-if="fav.username">@{{ fav.username }}</span>
+                <span v-if="fav.email">&nbsp;·&nbsp;{{ fav.email }}</span>
+              </div>
+            </div>
+          </router-link>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-/**
- * UserProfileView - Modular user profile page for Jam-Date.
- * Shows own or other user's profile and their profiles.
- */
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/api'
-import { useFavouriteStore } from '@/stores/favourite'
-
-// Accept userId as a prop for modular use
-const props = defineProps({
-  userId: {
-    type: [String, Number],
-    default: null,
-  },
-  isOwnProfile: {
-    type: Boolean,
-    default: false,
-  },
-})
+import { fetchAllProfiles, getUserFavourites } from '@/api/profile'
 
 const route = useRoute()
-const router = useRouter()
 const authStore = useAuthStore()
-const favouriteStore = useFavouriteStore()
-
-// Use prop if provided, else fallback to route param
-const effectiveUserId = computed(() => props.userId ?? route.params.userId)
-const currentUser = computed(() => authStore.getUser)
-const isOwnProfile = computed(
-  () =>
-    props.isOwnProfile ||
-    (currentUser.value && String(currentUser.value.id) === String(effectiveUserId.value)),
-)
+const userId = route.params.userId
 
 const userData = ref({})
 const profiles = ref([])
+const userFavourites = ref([])
 const loading = ref(true)
+const loadingFavourites = ref(true)
 const error = ref('')
-const favourites = ref([])
-const favouritesLoading = ref(false)
-const matches = ref([])
-const topFavourites = ref([])
-const topFavLoading = ref(false)
-const favSortBy = ref('name')
-const matchesLoading = ref(false)
-const matchReportVisible = ref(false)
 
-const fallbackUser = computed(() => {
-  // Use currentUser as fallback if available
-  return currentUser.value || null
-})
+const fetchUserData = async () => {
+  try {
+    const res = await api.get(`/users/${userId}`)
+    userData.value = res.data
+  } catch (err) {
+    error.value = 'Failed to fetch user info.'
+  }
+}
 
-const fetchUserProfile = async () => {
+const fetchUserProfiles = async () => {
+  try {
+    const res = await fetchAllProfiles()
+    profiles.value = res.data.filter(p => String(p.user_id_fk) === String(userId))
+  } catch (err) {
+    error.value = 'Failed to fetch user profiles.'
+  }
+}
+
+const fetchUserFavourites = async () => {
+  loadingFavourites.value = true
+  try {
+    const res = await getUserFavourites(userId)
+    userFavourites.value = res.data
+  } catch {
+    userFavourites.value = []
+  } finally {
+    loadingFavourites.value = false
+  }
+}
+
+onMounted(async () => {
   loading.value = true
   error.value = ''
-  try {
-    const userRes = await api.get(`/users/${effectiveUserId.value}`)
-    userData.value = userRes.data
-    const profilesRes = await api.get(`/profiles/?user_id=${effectiveUserId.value}`)
-    profiles.value = profilesRes.data
-  } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to load user profile.'
-    userData.value = {} // Clear userData so fallback is used
-  } finally {
-    loading.value = false
-  }
-}
-
-const fetchFavourites = async () => {
-  // Only fetch if this is the logged-in user's profile
-  if (!isOwnProfile.value || !currentUser.value) return
-  if (String(currentUser.value.id) !== String(effectiveUserId.value)) return
-  favouritesLoading.value = true
-  try {
-    const res = await api.get(`/users/${currentUser.value.id}/favourites`)
-    favourites.value = res.data
-  } catch {
-    favourites.value = []
-  } finally {
-    favouritesLoading.value = false
-  }
-}
-
-const showMatches = async (profileId) => {
-  matchesLoading.value = true
-  matchReportVisible.value = true
-  matches.value = []
-  try {
-    const res = await api.get(`/profiles/matches/${profileId}`)
-    matches.value = res.data
-  } catch {
-    matches.value = []
-  } finally {
-    matchesLoading.value = false
-  }
-}
-
-const fetchTopFavourites = async () => {
-  if (!isOwnProfile.value) return
-  topFavLoading.value = true
-  try {
-    const res = await api.get(`/users/favourites/${effectiveUserId.value}`)
-    topFavourites.value = res.data
-  } catch {
-    topFavourites.value = []
-  } finally {
-    topFavLoading.value = false
-  }
-}
-
-const sortedTopFavourites = computed(() => {
-  if (!Array.isArray(topFavourites.value)) return []
-  const arr = [...topFavourites.value]
-  if (favSortBy.value === 'name') {
-    arr.sort((a, b) => a.name.localeCompare(b.name))
-  } else if (favSortBy.value === 'parish') {
-    arr.sort((a, b) => (a.parish || '').localeCompare(b.parish || ''))
-  } else if (favSortBy.value === 'age') {
-    arr.sort((a, b) => {
-      const ageA = a.birth_year ? new Date().getFullYear() - a.birth_year : 0
-      const ageB = b.birth_year ? new Date().getFullYear() - b.birth_year : 0
-      return ageA - ageB
-    })
-  }
-  return arr
-})
-
-const handleLogout = () => {
-  authStore.logout()
-  router.push('/login')
-}
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  return new Date(dateStr).toLocaleDateString()
-}
-
-const addToFavourites = async (profile) => {
-  if (!profile || !profile.user_id) return
-  await favouriteStore.favouriteProfile(profile.user_id)
-}
-
-onMounted(() => {
-  fetchUserProfile()
-  fetchFavourites()
-  fetchTopFavourites()
+  await fetchUserData()
+  await fetchUserProfiles()
+  await fetchUserFavourites()
+  loading.value = false
 })
 </script>
 
 <style scoped>
-.main-content {
-  flex: 1;
-  padding: 2rem;
-  max-width: 900px;
+.user-profile-view {
+  padding: 0 0 3rem 0;
+  max-width: 800px;
   margin: 0 auto;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+.profile-header-bg {
+  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+  border-radius: 0 0 24px 24px;
+  padding: 2.5rem 1rem 2rem 1rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 24px rgba(56, 249, 215, 0.08);
 }
 .profile-header {
   display: flex;
   align-items: center;
   gap: 2rem;
-  margin-bottom: 2rem;
+  max-width: 700px;
+  margin: 0 auto;
+  position: relative;
 }
-.profile-avatar {
-  width: 80px;
-  height: 80px;
+.avatar-lg {
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
-  background: #e0e0e0;
+  background: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2.5rem;
-  color: #388e3c;
-  overflow: hidden;
+  color: #43e97b;
+  font-weight: bold;
+  box-shadow: 0 2px 12px rgba(67, 233, 123, 0.13);
 }
-.profile-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-.profile-info {
+.user-main-info {
   flex: 1;
 }
-.username {
-  color: #666;
-  font-size: 1rem;
-  margin-bottom: 0.25rem;
-}
-.email {
-  color: #888;
-  font-size: 0.95rem;
-  margin-bottom: 0.25rem;
-}
-.joined {
-  color: #aaa;
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-}
-.own-actions,
-.other-actions {
-  margin-top: 1rem;
-}
-.btn-primary {
-  background-color: #4caf50;
-  color: white;
-  padding: 0.5rem 1.2rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-}
-.btn-primary:hover {
-  background-color: #388e3c;
-}
-.btn-fav {
-  background: #fff;
-  color: #e53935;
-  border: 1px solid #e53935;
-  border-radius: 4px;
-  padding: 0.5rem 1.2rem;
-  cursor: pointer;
-  font-size: 1rem;
-  transition:
-    background 0.2s,
-    color 0.2s;
-}
-.btn-fav:hover {
-  background: #e53935;
-  color: #fff;
-}
-.user-profiles-section {
-  margin-top: 2rem;
-}
-.profile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1rem;
-}
-.profile-card {
-  background: linear-gradient(90deg, #f8fffc 0%, #e0f7fa 100%);
-  border-radius: 16px;
-  box-shadow: 0 2px 16px rgba(56, 249, 215, 0.07);
-  padding: 1.5rem 1.2rem 1.2rem 1.2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 200px;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
-}
-.profile-card:hover {
-  box-shadow: 0 6px 24px rgba(56, 249, 215, 0.13);
-  transform: translateY(-2px) scale(1.02);
-}
-.profile-details {
-  text-align: center;
-  width: 100%;
-}
-.profile-meta {
-  font-size: 1.05rem;
-  color: #666;
-  margin-bottom: 0.5rem;
-}
-.profile-name {
-  font-size: 1.25rem;
+.user-main-info h2 {
+  margin-bottom: 0.2rem;
+  font-size: 2rem;
   font-weight: 700;
   color: #222;
-  margin-bottom: 0.25rem;
 }
-.profile-desc {
-  font-size: 1.05rem;
-  color: #333;
-  margin-bottom: 0.7rem;
-}
-.profile-actions {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 0.5rem;
-}
-.details-link {
+.username {
   color: #43e97b;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 1.08rem;
-  transition: color 0.2s;
+  font-size: 1.1rem;
+  margin-bottom: 0.1rem;
 }
-.details-link:hover {
-  color: #388e3c;
-  text-decoration: underline;
+.email {
+  color: #666;
+  font-size: 1rem;
 }
-.btn-fav {
-  background: none;
+.btn-fab {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+  color: #fff;
   border: none;
-  color: #e53935;
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition:
-    color 0.2s,
-    transform 0.2s;
-  padding: 0.2rem 0.5rem;
   border-radius: 50%;
-  outline: none;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.13);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  z-index: 2;
 }
-.btn-fav:hover {
-  color: #b71c1c;
-  transform: scale(1.15);
+.btn-fab:hover {
+  background: #43e97b;
+  color: #fff;
 }
-.loading {
-  text-align: center;
-  color: #888;
-  font-size: 1.2rem;
-  margin-top: 2rem;
-}
-.error-message {
-  color: #d32f2f;
-  margin-top: 2rem;
-  text-align: center;
-}
-.user-favourites-section {
-  margin-top: 2.5rem;
+.section {
+  margin-bottom: 2.5rem;
 }
 .section-title {
-  font-size: 1.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   color: #388e3c;
-  letter-spacing: 0.5px;
+  margin-bottom: 1.2rem;
 }
-.icon {
-  font-size: 1.3em;
-  color: #e53935;
-  vertical-align: middle;
+.section-icon {
+  font-size: 1.5rem;
 }
-.icon-empty {
-  font-size: 2.2em;
-  color: #bdbdbd;
-  display: block;
-  margin-bottom: 0.5rem;
-}
-.empty-state {
-  background: #f8fafb;
-  border: 1.5px dashed #bdbdbd;
-  border-radius: 10px;
-  padding: 2.5rem 1rem;
-  text-align: center;
-  color: #888;
-  font-size: 1.1rem;
-  margin: 1.5rem 0;
+.profile-cards {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
 }
-.favourites-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.profile-card {
+  background: #f8fffc;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(67, 233, 123, 0.07);
+  padding: 1.2rem 1.5rem;
+  display: flex;
+  align-items: center;
   gap: 1.2rem;
-  margin-top: 1rem;
+  min-width: 220px;
+  flex: 1 1 220px;
 }
-.favourite-card {
-  background: linear-gradient(90deg, #e0eafc 0%, #cfdef3 100%);
-  border-radius: 10px;
-  padding: 1.2rem 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.07);
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
-}
-.favourite-card:hover {
-  box-shadow: 0 4px 16px rgba(56, 249, 215, 0.13);
-  transform: translateY(-2px) scale(1.02);
-}
-.fav-avatar {
+.avatar {
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -564,79 +255,120 @@ onMounted(() => {
   justify-content: center;
   font-size: 1.3rem;
   color: #388e3c;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(56, 249, 215, 0.08);
+  font-weight: bold;
 }
-.fav-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-.fav-info {
+.profile-card-info {
   flex: 1;
+}
+.profile-name {
+  font-weight: 600;
+  color: #222;
+  font-size: 1.1rem;
+}
+.profile-meta {
+  color: #666;
+  font-size: 0.98rem;
+  margin-bottom: 0.3rem;
+}
+.btn-view {
+  background: #43e97b;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 1rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-view:hover {
+  background: #388e3c;
+  color: #fff;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  color: #888;
+  text-align: center;
+}
+.empty-illustration {
+  width: 48px;
+  height: 48px;
+  opacity: 0.7;
+}
+.fav-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+}
+.fav-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.05);
+  padding: 0.8rem 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 180px;
+  flex: 1 1 180px;
+  transition: box-shadow 0.2s;
+}
+.fav-card:hover {
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.13);
+}
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: #388e3c;
+  font-weight: bold;
+}
+.fav-details {
+  display: flex;
+  flex-direction: column;
+  font-size: 1rem;
+  color: #222;
 }
 .fav-name {
   font-weight: 600;
   color: #222;
-  font-size: 1.08rem;
-}
-.fav-username {
-  color: #666;
-  font-size: 0.97rem;
-  margin-bottom: 0.18rem;
 }
 .fav-meta {
-  color: #388e3c;
-  font-size: 0.95rem;
-  margin-bottom: 0.18rem;
+  color: #666;
+  font-size: 0.97rem;
 }
-.fav-count {
+.loading {
   color: #888;
-  font-size: 0.95rem;
-  margin-top: 0.18rem;
+  margin: 1rem 0;
 }
-.sort-controls {
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.05rem;
-  color: #388e3c;
+.error-message {
+  color: #d32f2f;
+  margin: 1rem 0;
 }
-.sort-controls select {
-  padding: 0.3rem 0.7rem;
-  border-radius: 6px;
-  border: 1px solid #bdbdbd;
-  font-size: 1rem;
-  background: #f8fafb;
-  color: #222;
-  margin-left: 0.5rem;
-}
-.matches-section {
-  margin-top: 2.5rem;
-}
-.top-fav-section {
-  margin-top: 2.5rem;
-}
-.btn-match {
-  background: #ff9800;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 0.5rem 1.2rem;
-  cursor: pointer;
-  font-size: 1rem;
-  margin-left: 0.5rem;
-}
-.btn-match:hover {
-  background: #f57c00;
-}
-.match-report-section {
-  margin-top: 2.5rem;
-  background: #f8f0ff;
-  border-radius: 12px;
-  padding: 2rem;
-  box-shadow: 0 2px 16px rgba(56, 249, 215, 0.07);
+@media (max-width: 700px) {
+  .user-profile-view {
+    padding: 0 0 2rem 0;
+    gap: 1.5rem;
+  }
+  .profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  .profile-header-bg {
+    padding: 1.5rem 0.5rem 1.2rem 0.5rem;
+  }
+  .profile-cards, .fav-cards {
+    flex-direction: column;
+    gap: 1rem;
+  }
 }
 </style>

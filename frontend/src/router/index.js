@@ -45,10 +45,34 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/profiles/:profileId/edit',
+      name: 'profile-edit',
+      component: () => import('@/views/EditProfileView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/reports',
+      name: 'reports',
+      component: () => import('@/views/ReportsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/about',
       name: 'about',
       component: () => import('@/views/AboutView.vue'),
       meta: { requiresAuth: false },
+    },
+    {
+      path: '/users/:userId',
+      name: 'user-profile',
+      component: () => import('@/views/UserProfileView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profiles/favourites',
+      name: 'favourites',
+      component: () => import('@/views/FavouritesView.vue'),
+      meta: { requiresAuth: true },
     },
   ],
 })
@@ -67,4 +91,4 @@ router.beforeEach((to, from, next) => {
   }
 })
 
-export default router
+export default router 

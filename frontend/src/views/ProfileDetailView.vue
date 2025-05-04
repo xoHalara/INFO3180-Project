@@ -24,6 +24,7 @@
                 Favourite
               </button>
               <button class="btn-email">Email Profile</button>
+              <router-link v-if="user && user.id === profile.user_id" :to="`/profiles/${profile.id}/edit`" class="btn-edit">Edit Profile</router-link>
             </div>
             <div v-if="favError" class="error-message">{{ favError }}</div>
             <div v-if="favSuccess" class="success-message">Added to favourites!</div>
@@ -71,6 +72,7 @@ const error = ref('')
 const favLoading = ref(false)
 const favSuccess = ref(false)
 const favError = ref('')
+const user = authStore.getUser
 
 const fetchProfile = async () => {
   loading.value = true
@@ -194,6 +196,18 @@ onMounted(() => {
   font-size: 1rem;
 }
 .btn-email:hover {
+  background: #388e3c;
+}
+.btn-edit {
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.btn-edit:hover {
   background: #388e3c;
 }
 .profile-fields {

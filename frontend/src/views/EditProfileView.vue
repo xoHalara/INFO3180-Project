@@ -1,11 +1,14 @@
 <template>
-  <div class="profile-create-container">
-    <h2>Create New Profile</h2>
+  <div class="profile-edit-container">
+    <h2>Edit Profile</h2>
     <form @submit.prevent="handleSubmit" class="profile-form" enctype="multipart/form-data">
       <!-- 1. Profile Photo -->
       <div class="form-group">
         <label for="photo">Profile Photo:</label>
         <input type="file" id="photo" @change="handlePhotoChange" accept="image/*" class="form-control" />
+        <div v-if="form.photo && typeof form.photo === 'string'" class="current-photo">
+          <img :src="form.photo" alt="Current Profile Photo" style="max-width: 120px; max-height: 120px; margin-top: 8px;" />
+        </div>
       </div>
       <!-- 2. Biography -->
       <div class="form-group">
@@ -17,10 +20,10 @@
         <label for="description">Interests:</label>
         <textarea id="description" v-model="form.description" required class="form-control"></textarea>
       </div>
-      <!-- 4. Birthdate -->
+      <!-- 4. Birthdate (show as year, not editable) -->
       <div class="form-group">
-        <label for="birthdate">Birthdate:</label>
-        <input type="date" v-model="form.birthdate" id="birthdate" class="form-control" required />
+        <label for="birth_year">Birth Year:</label>
+        <input type="number" id="birth_year" v-model="form.birth_year" class="form-control" min="1800" max="2025" required />
       </div>
       <!-- 5. Sex -->
       <div class="form-group">
@@ -90,7 +93,7 @@
           <option value="Somewhat">Somewhat</option>
         </select>
       </div>
-      <button type="submit" class="btn-primary">Create Profile</button>
+      <button type="submit" class="btn-primary">Save Changes</button>
     </form>
     <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
     <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
@@ -98,15 +101,16 @@
 </template>
 
 <script setup>
-/**
- * ProfileCreateView - Form for creating a new profile in Jam-Date.
- */
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useProfileStore } from '@/stores/profile'
+import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import api from '@/api/api'
+import { useAuthStore } from '@/stores/auth'
 
+const route = useRoute()
 const router = useRouter()
-const profileStore = useProfileStore()
+const profileId = route.params.profileId
+const authStore = useAuthStore()
+const user = authStore.getUser
 
 const parishOptions = [
   'Kingston', 'St. Andrew', 'St. Thomas', 'Portland', 'St. Mary', 'St. Ann',
@@ -127,7 +131,7 @@ const form = ref({
   political: '',
   religious: '',
   family_oriented: '',
-  birthdate: '',
+  birth_year: '',
   photo: null,
 })
 
@@ -135,6 +139,26 @@ const heightOptions = Array.from({ length: 251 }, (_, i) => 50 + i) // 50 to 300
 
 const errorMessage = ref('')
 const successMessage = ref('')
+
+const fetchProfile = async () => {
+  try {
+    const res = await api.get(`/profiles/${profileId}`)
+    // Only allow editing if the logged-in user is the owner
+    if (!user || user.id !== res.data.user_id) {
+      errorMessage.value = 'You are not authorized to edit this profile.'
+      setTimeout(() => router.push(`/profiles/${profileId}`), 1500)
+      return
+    }
+    // Pre-fill form with profile data
+    Object.assign(form.value, res.data)
+    // Convert booleans to Yes/No/Somewhat for selects
+    form.value.political = res.data.political ? 'Yes' : 'No'
+    form.value.religious = res.data.religious ? 'Yes' : 'No'
+    form.value.family_oriented = res.data.family_oriented ? 'Yes' : 'No'
+  } catch (err) {
+    errorMessage.value = err.response?.data?.message || 'Failed to load profile.'
+  }
+}
 
 const handlePhotoChange = (event) => {
   const file = event.target.files[0]
@@ -148,33 +172,31 @@ const handleSubmit = async () => {
     const payload = new FormData()
     for (const key in form.value) {
       if (form.value[key] !== null && form.value[key] !== '') {
-        if (key !== 'birthdate') {
+        if (key !== 'photo' || typeof form.value.photo !== 'string') {
           payload.append(key, form.value[key])
         }
       }
     }
-    if (form.value.birthdate) {
-      const year = new Date(form.value.birthdate).getFullYear()
-      payload.append('birth_year', year)
-    }
     payload.set('political', form.value.political === 'Yes')
     payload.set('religious', form.value.religious === 'Yes')
     payload.set('family_oriented', form.value.family_oriented === 'Yes')
-    await profileStore.createProfile(payload, true)
-    successMessage.value = 'Profile created successfully!'
-    setTimeout(() => router.push('/profile'), 1000)
+    await api.put(`/profiles/${profileId}`, payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    successMessage.value = 'Profile updated successfully!'
+    setTimeout(() => router.push(`/profiles/${profileId}`), 1000)
   } catch (err) {
-    errorMessage.value = err.response?.data?.message || 'Failed to create profile.'
+    errorMessage.value = err.response?.data?.message || 'Failed to update profile.'
   }
 }
 
-const goToProfile = () => {
-  router.push('/profile')
-}
+onMounted(() => {
+  fetchProfile()
+})
 </script>
 
 <style scoped>
-.profile-create-container {
+.profile-edit-container {
   max-width: 500px;
   margin: 2rem auto;
   padding: 2rem;
@@ -210,19 +232,6 @@ const goToProfile = () => {
 .btn-primary:hover {
   background-color: #388e3c;
 }
-.btn-secondary {
-  background-color: #eee;
-  color: #333;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-}
-.btn-secondary:hover {
-  background-color: #ccc;
-}
 .error-message {
   color: #d32f2f;
   margin-top: 0.5rem;
@@ -233,4 +242,8 @@ const goToProfile = () => {
   margin-top: 0.5rem;
   text-align: center;
 }
-</style>
+.current-photo img {
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+</style> 
