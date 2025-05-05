@@ -19,7 +19,7 @@
           >
             <span class="material-icons">add</span>
           </router-link>
-          <div v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)" class="more-options">
+          <div class="more-options">
             <button class="btn-more" @click="toggleDropdown" ref="moreButton">
               <span class="material-icons">more_vert</span>
             </button>
@@ -98,6 +98,30 @@
               <span class="material-icons">edit</span>
               Edit
             </button>
+            <button
+              v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
+              class="btn-match"
+              @click="matchMe(profile.id)"
+              :disabled="matchLoading[profile.id]"
+            >
+              <span class="material-icons">favorite</span>
+              {{ matchLoading[profile.id] ? 'Matching...' : 'Match Me' }}
+            </button>
+          </div>
+          <div v-if="matchError[profile.id]" class="error-message">
+            <span class="material-icons">error</span>
+            {{ matchError[profile.id] }}
+          </div>
+          <div v-if="matchResults[profile.id] && matchResults[profile.id].length" class="match-results">
+            <h4>Matches:</h4>
+            <ul>
+              <li v-for="match in matchResults[profile.id]" :key="match.id">
+                <span>{{ match.name }}</span> ({{ match.sex }}, {{ match.race }}, Born {{ match.birth_year }})
+              </li>
+            </ul>
+          </div>
+          <div v-else-if="matchResults[profile.id] && !matchResults[profile.id].length" class="no-matches">
+            <span>No matches found.</span>
           </div>
         </div>
       </div>
@@ -132,6 +156,18 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showDeleteModal" class="modal-overlay">
+      <div class="modal-dialog delete-modal">
+        <span class="material-icons warning-icon">warning</span>
+        <h3>Delete Account</h3>
+        <p class="delete-message">Are you sure you want to delete your account? <br>This action <b>cannot</b> be undone.</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="cancelDelete">Cancel</button>
+          <button class="btn-delete" @click="deleteAccount">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -140,7 +176,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/api'
-import { fetchAllProfiles, getUserFavourites } from '@/api/profile'
+import { fetchAllProfiles, getUserFavourites, getProfileMatches } from '@/api/profile'
 
 const route = useRoute()
 const router = useRouter()
@@ -155,6 +191,10 @@ const loadingFavourites = ref(true)
 const error = ref('')
 const showDropdown = ref(false)
 const moreButton = ref(null)
+const matchResults = ref({})
+const matchLoading = ref({})
+const matchError = ref({})
+const showDeleteModal = ref(false)
 
 const toggleDropdown = () => {
   showDropdown.value = !showDropdown.value
@@ -171,9 +211,11 @@ const editAccount = () => {
 }
 
 const confirmDelete = () => {
-  if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-    deleteAccount()
-  }
+  showDeleteModal.value = true
+}
+
+const cancelDelete = () => {
+  showDeleteModal.value = false
 }
 
 const deleteAccount = async () => {
@@ -183,6 +225,8 @@ const deleteAccount = async () => {
     router.push('/login')
   } catch (err) {
     error.value = 'Failed to delete account. Please try again.'
+  } finally {
+    showDeleteModal.value = false
   }
 }
 
@@ -218,6 +262,20 @@ const fetchUserFavourites = async () => {
 
 const editProfile = (profileId) => {
   router.push(`/profiles/${profileId}/edit`)
+}
+
+const matchMe = async (profileId) => {
+  matchLoading.value[profileId] = true
+  matchError.value[profileId] = ''
+  try {
+    const res = await getProfileMatches(profileId)
+    matchResults.value[profileId] = res.data
+  } catch (err) {
+    matchError.value[profileId] = 'Failed to fetch matches.'
+    matchResults.value[profileId] = []
+  } finally {
+    matchLoading.value[profileId] = false
+  }
 }
 
 onMounted(async () => {
@@ -262,6 +320,7 @@ onUnmounted(() => {
   max-width: 900px;
   margin: 0 auto;
   position: relative;
+  min-height: 120px;
 }
 
 .avatar-lg {
@@ -320,6 +379,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s ease;
   z-index: 2;
+  margin-right: 80px;
 }
 
 .btn-fab:hover {
@@ -605,26 +665,34 @@ onUnmounted(() => {
 }
 
 .more-options {
-  position: relative;
+  position: absolute;
+  right: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  margin-left: 1.5rem;
 }
 
 .btn-more {
-  background: white;
-  color: #43e97b;
+  background: #43e97b;
+  color: white;
   border: none;
   border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 2.2rem;
   box-shadow: 0 4px 16px rgba(67, 233, 123, 0.2);
   cursor: pointer;
   transition: all 0.3s ease;
+  z-index: 11;
+  margin-left: 1rem;
 }
 
 .btn-more:hover {
+  background: #38d16a;
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(67, 233, 123, 0.3);
 }
@@ -670,6 +738,109 @@ onUnmounted(() => {
 
 .dropdown-item .material-icons {
   font-size: 1.2rem;
+}
+
+.btn-match {
+  background: #43e97b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+.btn-match:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.match-results {
+  margin-top: 1rem;
+  background: #f0fdf4;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.match-results h4 {
+  margin-bottom: 0.5rem;
+  color: #16a34a;
+}
+.no-matches {
+  margin-top: 1rem;
+  color: #888;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-dialog {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  min-width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(67, 233, 123, 0.15);
+  position: relative;
+  text-align: center;
+}
+.delete-modal .warning-icon {
+  color: #e53935;
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.delete-modal h3 {
+  color: #e53935;
+  margin-bottom: 0.5rem;
+}
+.delete-message {
+  color: #333;
+  margin-bottom: 1.5rem;
+  font-size: 1.1rem;
+}
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+.btn-cancel {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-cancel:hover {
+  background: #e5e7eb;
+}
+.btn-delete {
+  background: #e53935;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-delete:hover {
+  background: #b91c1c;
 }
 
 @media (max-width: 768px) {

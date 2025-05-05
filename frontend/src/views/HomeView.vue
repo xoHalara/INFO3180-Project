@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useProfileStore } from '@/stores/profile'
 import { useFavouriteStore } from '@/stores/favourite'
+import { getProfileMatches, fetchAllProfiles } from '@/api/profile'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -62,8 +63,58 @@ watch(searchParams, (val) => {
   }
 })
 
+const userProfiles = ref([])
+const selectedProfileId = ref('')
+const matchResults = ref([])
+const matchLoading = ref(false)
+const matchError = ref('')
+
+const showMatchModal = ref(false)
+const matchTargetProfile = ref(null)
+
+const openMatchModal = (profile) => {
+  matchTargetProfile.value = profile
+  showMatchModal.value = true
+  selectedProfileId.value = ''
+  matchResults.value = []
+  matchError.value = ''
+}
+const closeMatchModal = () => {
+  showMatchModal.value = false
+  matchTargetProfile.value = null
+  selectedProfileId.value = ''
+  matchResults.value = []
+  matchError.value = ''
+}
+
+const fetchUserProfiles = async () => {
+  if (!user.value?.id) return
+  try {
+    const res = await fetchAllProfiles()
+    userProfiles.value = res.data.filter(p => String(p.user_id_fk ?? p.user_id) === String(user.value.id))
+  } catch {
+    userProfiles.value = []
+  }
+}
+
+const matchMe = async () => {
+  if (!selectedProfileId.value) return
+  matchLoading.value = true
+  matchError.value = ''
+  try {
+    const res = await getProfileMatches(selectedProfileId.value)
+    matchResults.value = res.data
+  } catch (err) {
+    matchError.value = 'Failed to fetch matches.'
+    matchResults.value = []
+  } finally {
+    matchLoading.value = false
+  }
+}
+
 onMounted(async () => {
   await profileStore.loadLastProfiles(4)
+  await fetchUserProfiles()
 })
 
 const filteredSearchResults = computed(() => {
@@ -86,6 +137,40 @@ const filteredLastProfiles = computed(() => {
         <p class="welcome-subtitle">Find your perfect match in Jamaica</p>
       </div>
       
+      <!-- Match Me Section -->
+      <div class="match-me-section">
+        <h2>Match Me</h2>
+        <div class="match-me-controls">
+          <label for="profile-select">Select one of your profiles:</label>
+          <select id="profile-select" v-model="selectedProfileId">
+            <option value="" disabled>Select a profile</option>
+            <option v-for="profile in userProfiles" :key="profile.id" :value="profile.id">
+              {{ profile.name }} ({{ profile.sex }}, {{ profile.race }}, Born {{ profile.birth_year }})
+            </option>
+          </select>
+          <button class="btn-match-me" :disabled="!selectedProfileId || matchLoading" @click="matchMe">
+            <span class="material-icons">favorite</span>
+            {{ matchLoading ? 'Matching...' : 'Match Me' }}
+          </button>
+        </div>
+        <div v-if="matchError" class="error-message">
+          <span class="material-icons">error</span>
+          {{ matchError }}
+        </div>
+        <div v-if="matchResults && matchResults.length" class="match-results">
+          <h4>Matches:</h4>
+          <ul>
+            <li v-for="match in matchResults" :key="match.id">
+              <span>{{ match.name }}</span> ({{ match.sex }}, {{ match.race }}, Born {{ match.birth_year }})
+            </li>
+          </ul>
+        </div>
+        <div v-else-if="matchResults && !matchResults.length && selectedProfileId && !matchLoading" class="no-matches">
+          <span>No matches found.</span>
+        </div>
+      </div>
+      <!-- End Match Me Section -->
+
       <div class="content-section search-section">
         <h2>Search Profiles</h2>
         <form @submit.prevent="handleSearch" class="search-form">
@@ -156,6 +241,10 @@ const filteredLastProfiles = computed(() => {
                   <span v-if="!favouriteStore.favStates[profile.user_id]?.success" class="material-icons">favorite_border</span>
                   <span v-else class="material-icons">favorite</span>
                 </button>
+                <button class="btn-match-me" @click="openMatchModal(profile)">
+                  <span class="material-icons">favorite</span>
+                  Match Me
+                </button>
               </div>
               <div v-if="favouriteStore.favStates[profile.user_id]?.error" class="fav-error">
                 {{ favouriteStore.favStates[profile.user_id].error }}
@@ -220,6 +309,10 @@ const filteredLastProfiles = computed(() => {
                   <span v-if="!favouriteStore.favStates[profile.user_id]?.success" class="material-icons">favorite_border</span>
                   <span v-else class="material-icons">favorite</span>
                 </button>
+                <button class="btn-match-me" @click="openMatchModal(profile)">
+                  <span class="material-icons">favorite</span>
+                  Match Me
+                </button>
               </div>
               <div v-if="favouriteStore.favStates[profile.user_id]?.error" class="fav-error">
                 {{ favouriteStore.favStates[profile.user_id].error }}
@@ -237,6 +330,42 @@ const filteredLastProfiles = computed(() => {
         {{ profileStore.error.message || profileStore.error }}
       </div>
     </main>
+
+    <!-- Modal Dialog -->
+    <div v-if="showMatchModal" class="modal-overlay">
+      <div class="modal-dialog">
+        <button class="modal-close" @click="closeMatchModal">&times;</button>
+        <h3>Match Me with {{ matchTargetProfile?.name }}</h3>
+        <div class="modal-controls">
+          <label for="modal-profile-select">Select one of your profiles:</label>
+          <select id="modal-profile-select" v-model="selectedProfileId">
+            <option value="" disabled>Select a profile</option>
+            <option v-for="profile in userProfiles" :key="profile.id" :value="profile.id">
+              {{ profile.name }} ({{ profile.sex }}, {{ profile.race }}, Born {{ profile.birth_year }})
+            </option>
+          </select>
+          <button class="btn-match-me" :disabled="!selectedProfileId || matchLoading" @click="matchMe">
+            <span class="material-icons">favorite</span>
+            {{ matchLoading ? 'Matching...' : 'Find Matches' }}
+          </button>
+        </div>
+        <div v-if="matchError" class="error-message">
+          <span class="material-icons">error</span>
+          {{ matchError }}
+        </div>
+        <div v-if="matchResults && matchResults.length" class="match-results">
+          <h4>Matches:</h4>
+          <ul>
+            <li v-for="match in matchResults" :key="match.id">
+              <span>{{ match.name }}</span> ({{ match.sex }}, {{ match.race }}, Born {{ match.birth_year }})
+            </li>
+          </ul>
+        </div>
+        <div v-else-if="matchResults && !matchResults.length && selectedProfileId && !matchLoading" class="no-matches">
+          <span>No matches found.</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -589,6 +718,52 @@ const filteredLastProfiles = computed(() => {
   border-radius: 4px;
 }
 
+.match-me-section {
+  background: #f8fafb;
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.08);
+}
+.match-me-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.btn-match-me {
+  background: #43e97b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+.btn-match-me:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.match-results {
+  margin-top: 1rem;
+  background: #f0fdf4;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.match-results h4 {
+  margin-bottom: 0.5rem;
+  color: #16a34a;
+}
+.no-matches {
+  margin-top: 1rem;
+  color: #888;
+}
+
 @media (max-width: 900px) {
   .main-content {
     padding: 1rem;
@@ -649,6 +824,50 @@ const filteredLastProfiles = computed(() => {
   .profile-avatar {
     width: 80px;
     height: 80px;
+  }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-dialog {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  min-width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(67, 233, 123, 0.15);
+  position: relative;
+}
+.modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #888;
+  cursor: pointer;
+}
+.modal-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 600px) {
+  .modal-dialog {
+    padding: 1rem;
+    min-width: 90vw;
   }
 }
 </style>
