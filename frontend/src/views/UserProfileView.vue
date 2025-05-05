@@ -198,7 +198,7 @@ const fetchUserData = async () => {
 const fetchUserProfiles = async () => {
   try {
     const res = await fetchAllProfiles()
-    profiles.value = res.data.filter(p => String(p.user_id_fk) === String(userId))
+    profiles.value = res.data.filter(p => String(p.user_id_fk ?? p.user_id) === String(userId))
   } catch (err) {
     error.value = 'Failed to fetch user profiles.'
   }
