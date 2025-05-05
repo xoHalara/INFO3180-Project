@@ -10,14 +10,31 @@
           <p v-if="userData.username" class="username">@{{ userData.username }}</p>
           <p v-if="userData.email" class="email">{{ userData.email }}</p>
         </div>
-        <router-link
-          v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
-          to="/profiles/new"
-          class="btn-fab"
-          title="Add Profile"
-        >
-          <span class="material-icons">add</span>
-        </router-link>
+        <div class="profile-actions">
+          <router-link
+            v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
+            to="/profiles/new"
+            class="btn-fab"
+            title="Add Profile"
+          >
+            <span class="material-icons">add</span>
+          </router-link>
+          <div v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)" class="more-options">
+            <button class="btn-more" @click="toggleDropdown" ref="moreButton">
+              <span class="material-icons">more_vert</span>
+            </button>
+            <div v-if="showDropdown" class="dropdown-menu">
+              <button class="dropdown-item" @click="editAccount">
+                <span class="material-icons">edit</span>
+                Edit Account
+              </button>
+              <button class="dropdown-item delete" @click="confirmDelete">
+                <span class="material-icons">delete</span>
+                Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -119,7 +136,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/api'
@@ -136,6 +153,38 @@ const userFavourites = ref([])
 const loading = ref(true)
 const loadingFavourites = ref(true)
 const error = ref('')
+const showDropdown = ref(false)
+const moreButton = ref(null)
+
+const toggleDropdown = () => {
+  showDropdown.value = !showDropdown.value
+}
+
+const handleClickOutside = (event) => {
+  if (moreButton.value && !moreButton.value.contains(event.target)) {
+    showDropdown.value = false
+  }
+}
+
+const editAccount = () => {
+  router.push(`/users/${userId}/edit`)
+}
+
+const confirmDelete = () => {
+  if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+    deleteAccount()
+  }
+}
+
+const deleteAccount = async () => {
+  try {
+    await api.delete(`/users/${userId}`)
+    authStore.logout()
+    router.push('/login')
+  } catch (err) {
+    error.value = 'Failed to delete account. Please try again.'
+  }
+}
 
 const fetchUserData = async () => {
   try {
@@ -172,12 +221,19 @@ const editProfile = (profileId) => {
 }
 
 onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
   loading.value = true
   error.value = ''
-  await fetchUserData()
-  await fetchUserProfiles()
-  await fetchUserFavourites()
+  await Promise.all([
+    fetchUserData(),
+    fetchUserProfiles(),
+    fetchUserFavourites()
+  ])
   loading.value = false
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -538,6 +594,84 @@ onMounted(async () => {
   font-size: 1.4rem;
 }
 
+.profile-actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 1rem;
+  z-index: 2;
+}
+
+.more-options {
+  position: relative;
+}
+
+.btn-more {
+  background: white;
+  color: #43e97b;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.2);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-more:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(67, 233, 123, 0.3);
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  border: none;
+  background: none;
+  color: #2c3e50;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background: #f8fafb;
+}
+
+.dropdown-item.delete {
+  color: #dc2626;
+}
+
+.dropdown-item.delete:hover {
+  background: #fee2e2;
+}
+
+.dropdown-item .material-icons {
+  font-size: 1.2rem;
+}
+
 @media (max-width: 768px) {
   .user-profile-view {
     padding: 0 0 2rem 0;
@@ -559,10 +693,16 @@ onMounted(async () => {
     font-size: 2rem;
   }
   
-  .btn-fab {
+  .profile-actions {
     position: static;
     transform: none;
     margin-top: 1rem;
+    justify-content: center;
+  }
+  
+  .dropdown-menu {
+    right: 50%;
+    transform: translateX(50%);
   }
   
   .section {
