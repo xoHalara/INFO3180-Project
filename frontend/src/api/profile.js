@@ -44,9 +44,11 @@ export const getProfileMatches = (profileId) => api.get(`/profiles/matches/${pro
 /**
  * Get all users favoured by a user.
  */
-export const getUserFavourites = (userId) => api.get(`/users/${userId}/favourites`)
+export const getUserFavourites = (userId, sort_by = 'name', order = 'asc') =>
+  api.get(`/users/${userId}/favourites`, { params: { sort_by, order } })
 
 /**
  * Get the top N most favoured users.
  */
-export const getTopFavourites = (n = 20) => api.get(`/users/favourites/${n}`)
+export const getTopFavourites = (n = 20, sort_by = 'name', order = 'asc') =>
+  api.get(`/users/favourites/${n}`, { params: { sort_by, order } })
