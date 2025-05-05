@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -19,6 +19,20 @@ def create_app(config_class=Config):
     
     # Enable CORS for all routes and origins (for development)
     CORS(app)
+    
+    # Root route
+    @app.route('/')
+    def index():
+        return jsonify({
+            'message': 'Welcome to the API',
+            'endpoints': {
+                'auth': '/api/auth',
+                'profiles': '/api/profiles',
+                'users': '/api/users',
+                'search': '/api/search',
+                'reports': '/api/reports'
+            }
+        })
     
     from app.routes import auth, profiles, users, search, reports
     app.register_blueprint(auth.bp)
