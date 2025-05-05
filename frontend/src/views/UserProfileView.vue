@@ -26,7 +26,15 @@
         <span class="material-icons section-icon">badge</span>
         User's Profiles
       </div>
-      <div v-if="profiles.length === 0" class="empty-state">
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading profiles...</p>
+      </div>
+      <div v-else-if="error" class="error-message">
+        <span class="material-icons">error</span>
+        {{ error }}
+      </div>
+      <div v-else-if="profiles.length === 0" class="empty-state">
         <img src="https://cdn.jsdelivr.net/gh/edent/SuperTinyIcons/images/svg/user.svg" alt="No profiles" class="empty-illustration" />
         <div>No profiles found for this user.</div>
         <router-link
@@ -34,16 +42,45 @@
           to="/profiles/new"
           class="btn-primary"
         >
+          <span class="material-icons">add_circle</span>
           Create a profile
         </router-link>
       </div>
       <div v-else class="profile-cards">
         <div v-for="profile in profiles" :key="profile.id" class="profile-card">
-          <div class="avatar">{{ profile.name ? profile.name[0].toUpperCase() : '?' }}</div>
-          <div class="profile-card-info">
-            <div class="profile-name">{{ profile.name }}</div>
-            <div class="profile-meta">{{ profile.sex }}, {{ profile.race }}, Born {{ profile.birth_year }}</div>
-            <router-link :to="`/profiles/${profile.id}`" class="btn-view">View</router-link>
+          <div class="profile-card-header">
+            <div class="avatar">{{ profile.name ? profile.name[0].toUpperCase() : '?' }}</div>
+            <div class="profile-card-info">
+              <div class="profile-name">{{ profile.name }}</div>
+              <div class="profile-meta">
+                <span class="meta-item">
+                  <span class="material-icons">person</span>
+                  {{ profile.sex }}
+                </span>
+                <span class="meta-item">
+                  <span class="material-icons">public</span>
+                  {{ profile.race }}
+                </span>
+                <span class="meta-item">
+                  <span class="material-icons">calendar_today</span>
+                  Born {{ profile.birth_year }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="profile-card-actions">
+            <router-link :to="`/profiles/${profile.id}`" class="btn-view">
+              <span class="material-icons">visibility</span>
+              View Details
+            </router-link>
+            <button 
+              v-if="authStore.getUser && String(authStore.getUser.id) === String(userId)"
+              class="btn-edit"
+              @click="editProfile(profile.id)"
+            >
+              <span class="material-icons">edit</span>
+              Edit
+            </button>
           </div>
         </div>
       </div>
@@ -54,7 +91,10 @@
         <span class="material-icons section-icon">favorite</span>
         Users Favourited by This User
       </div>
-      <div v-if="loadingFavourites" class="loading">Loading favourites...</div>
+      <div v-if="loadingFavourites" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading favourites...</p>
+      </div>
       <div v-else-if="userFavourites.length === 0" class="empty-state">
         <img src="https://cdn.jsdelivr.net/gh/edent/SuperTinyIcons/images/svg/heart.svg" alt="No favourites" class="empty-illustration" />
         <div>This user has not favourited any users yet.</div>
@@ -70,6 +110,7 @@
                 <span v-if="fav.email">&nbsp;·&nbsp;{{ fav.email }}</span>
               </div>
             </div>
+            <span class="material-icons">chevron_right</span>
           </router-link>
         </div>
       </div>
@@ -79,12 +120,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api/api'
 import { fetchAllProfiles, getUserFavourites } from '@/api/profile'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const userId = route.params.userId
 
@@ -125,6 +167,10 @@ const fetchUserFavourites = async () => {
   }
 }
 
+const editProfile = (profileId) => {
+  router.push(`/profiles/${profileId}/edit`)
+}
+
 onMounted(async () => {
   loading.value = true
   error.value = ''
@@ -138,237 +184,402 @@ onMounted(async () => {
 <style scoped>
 .user-profile-view {
   padding: 0 0 3rem 0;
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
 }
+
 .profile-header-bg {
-  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
   border-radius: 0 0 24px 24px;
   padding: 2.5rem 1rem 2rem 1rem;
   margin-bottom: 2rem;
-  box-shadow: 0 4px 24px rgba(56, 249, 215, 0.08);
+  box-shadow: 0 4px 24px rgba(56, 249, 215, 0.15);
 }
+
 .profile-header {
   display: flex;
   align-items: center;
   gap: 2rem;
-  max-width: 700px;
+  max-width: 900px;
   margin: 0 auto;
   position: relative;
 }
+
 .avatar-lg {
-  width: 90px;
-  height: 90px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
-  background: #fff;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2.5rem;
+  font-size: 3rem;
   color: #43e97b;
   font-weight: bold;
-  box-shadow: 0 2px 12px rgba(67, 233, 123, 0.13);
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.2);
 }
+
 .user-main-info {
   flex: 1;
 }
+
 .user-main-info h2 {
-  margin-bottom: 0.2rem;
-  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  font-size: 2.5rem;
   font-weight: 700;
-  color: #222;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
 .username {
-  color: #43e97b;
-  font-size: 1.1rem;
-  margin-bottom: 0.1rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.2rem;
+  margin-bottom: 0.3rem;
 }
+
 .email {
-  color: #666;
-  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
 }
+
 .btn-fab {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
-  color: #fff;
+  background: white;
+  color: #43e97b;
   border: none;
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.13);
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.2);
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: all 0.3s ease;
   z-index: 2;
 }
+
 .btn-fab:hover {
-  background: #43e97b;
-  color: #fff;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 20px rgba(67, 233, 123, 0.3);
 }
+
 .section {
-  margin-bottom: 2.5rem;
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
 }
+
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  font-size: 1.3rem;
+  gap: 0.8rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  color: #388e3c;
-  margin-bottom: 1.2rem;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
 }
+
 .section-icon {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  color: #43e97b;
 }
-.profile-cards {
+
+.loading-state {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-}
-.profile-card {
-  background: #f8fffc;
-  border-radius: 14px;
-  box-shadow: 0 2px 12px rgba(67, 233, 123, 0.07);
-  padding: 1.2rem 1.5rem;
-  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1.2rem;
-  min-width: 220px;
-  flex: 1 1 220px;
-}
-.avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: #e0e0e0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.3rem;
-  color: #388e3c;
-  font-weight: bold;
-}
-.profile-card-info {
-  flex: 1;
-}
-.profile-name {
-  font-weight: 600;
-  color: #222;
-  font-size: 1.1rem;
-}
-.profile-meta {
+  gap: 1rem;
+  padding: 2rem;
   color: #666;
-  font-size: 0.98rem;
-  margin-bottom: 0.3rem;
 }
-.btn-view {
-  background: #43e97b;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.3rem 1rem;
-  font-size: 0.98rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: background 0.2s, color 0.2s;
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(67, 233, 123, 0.1);
+  border-left-color: #43e97b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
-.btn-view:hover {
-  background: #388e3c;
-  color: #fff;
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 1rem;
-  color: #888;
+  padding: 3rem 2rem;
+  color: #666;
   text-align: center;
 }
+
 .empty-illustration {
-  width: 48px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   opacity: 0.7;
 }
-.fav-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.2rem;
-}
-.fav-card {
-  background: #f8f9fa;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.05);
-  padding: 0.8rem 1.2rem;
+
+.btn-primary {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  min-width: 180px;
-  flex: 1 1 180px;
-  transition: box-shadow 0.2s;
+  gap: 0.5rem;
+  background: #43e97b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
 }
-.fav-card:hover {
-  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.13);
+
+.btn-primary:hover {
+  background: #38d16a;
+  transform: translateY(-2px);
 }
-.avatar-sm {
-  width: 32px;
-  height: 32px;
+
+.profile-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.profile-card {
+  background: #f8fafb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.profile-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.1);
+}
+
+.profile-card-header {
+  display: flex;
+  gap: 1.2rem;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
-  background: #e0e0e0;
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
-  color: #388e3c;
+  font-size: 1.8rem;
+  color: white;
   font-weight: bold;
+  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.2);
 }
-.fav-details {
+
+.profile-card-info {
+  flex: 1;
+}
+
+.profile-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-meta {
   display: flex;
   flex-direction: column;
-  font-size: 1rem;
-  color: #222;
+  gap: 0.5rem;
 }
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.meta-item .material-icons {
+  font-size: 1.1rem;
+  color: #43e97b;
+}
+
+.profile-card-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-view, .btn-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.btn-view {
+  background: #43e97b;
+  color: white;
+  border: none;
+  flex: 1;
+  justify-content: center;
+}
+
+.btn-view:hover {
+  background: #38d16a;
+  transform: translateY(-2px);
+}
+
+.btn-edit {
+  background: #f3f4f6;
+  color: #4b5563;
+  border: none;
+}
+
+.btn-edit:hover {
+  background: #e5e7eb;
+  transform: translateY(-2px);
+}
+
+.fav-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.fav-card {
+  background: #f8fafb;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.fav-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(67, 233, 123, 0.1);
+}
+
+.fav-link {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.2rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.avatar-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: white;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(67, 233, 123, 0.2);
+}
+
+.fav-details {
+  flex: 1;
+}
+
 .fav-name {
   font-weight: 600;
-  color: #222;
+  color: #2c3e50;
+  font-size: 1.1rem;
+  margin-bottom: 0.2rem;
 }
+
 .fav-meta {
   color: #666;
-  font-size: 0.97rem;
+  font-size: 0.9rem;
 }
-.loading {
-  color: #888;
-  margin: 1rem 0;
+
+.fav-link .material-icons {
+  color: #43e97b;
+  font-size: 1.4rem;
 }
-.error-message {
-  color: #d32f2f;
-  margin: 1rem 0;
-}
-@media (max-width: 700px) {
+
+@media (max-width: 768px) {
   .user-profile-view {
     padding: 0 0 2rem 0;
     gap: 1.5rem;
   }
+  
   .profile-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: center;
+    text-align: center;
+    gap: 1.5rem;
   }
+  
   .profile-header-bg {
-    padding: 1.5rem 0.5rem 1.2rem 0.5rem;
+    padding: 2rem 1rem 1.5rem 1rem;
   }
+  
+  .user-main-info h2 {
+    font-size: 2rem;
+  }
+  
+  .btn-fab {
+    position: static;
+    transform: none;
+    margin-top: 1rem;
+  }
+  
+  .section {
+    padding: 1.5rem;
+  }
+  
   .profile-cards, .fav-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .profile-card-actions {
     flex-direction: column;
-    gap: 1rem;
+  }
+  
+  .btn-view, .btn-edit {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
